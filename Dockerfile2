@@ -1,5 +1,5 @@
 # Use the official R base image with Python support
-FROM rocker/r-ver:4.0.3
+FROM rocker/r-ver:4.3.1
 
 # Install Python and necessary tools
 RUN apt-get update && apt-get install -y \
