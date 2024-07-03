@@ -1,0 +1,6 @@
+laspy==2.5.1
+numpy==1.25.2
+opencv-python-headless==4.8.0.76
+shapely==2.0.1
+geopandas==0.13.2        
+pyproj==3.6.0

@@ -1,0 +1,34 @@
+# Use the official R base image with Python support
+FROM rocker/r-ver:4.0.3
+
+# Install Python and necessary tools
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip
+
+# Install required Python packages
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
+
+# Copy the R requirements file
+COPY requirements.R /app/requirements.R
+
+# Install specific versions of R packages
+RUN Rscript /app/requirements.R
+
+# Copy the Python and R scripts to the container
+COPY preprocess.py /app/preprocess.py
+COPY process.R /app/process.R
+COPY postprocess.py /app/postprocess.py
+
+# Set the working directory
+WORKDIR /app
+
+# Run the preprocessing script
+RUN python3 preprocess.py
+
+# Run the R script
+RUN Rscript process.R
+
+# Run the post-processing script
+CMD ["python3", "postprocess.py"]
