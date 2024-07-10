@@ -17,105 +17,142 @@ out_base_dir <- "./test_results"
 # List all subdirectories
 subdirs <- list.dirs(base_dir, full.names = TRUE, recursive = TRUE)
 subdirs <- subdirs[subdirs != base_dir]
-subdirs <- c("./test_data/121_pcl")
+# subdirs <- c("./test_data/121_pcl")
 
 print(subdirs)
 
 lasfilternoise <- function(las, sensitivity){
-  # Create a function to filter noise from point cloud
-  # https://cran.r-project.org/web/packages/lidR/vignettes/lidR-catalog-apply-examples.html
-  p95 <- grid_metrics(las, ~quantile(Z, probs = 0.95), 10)
-  las <- merge_spatial(las, p95, "p95")
-  las <- filter_poi(las, Z < p95*sensitivity)
-  las$p95 <- NULL
-  return(las)
+  tryCatch({
+    p95 <- grid_metrics(las, ~quantile(Z, probs = 0.95), 10)
+    las <- merge_spatial(las, p95, "p95")
+    las <- filter_poi(las, Z < p95*sensitivity)
+    las$p95 <- NULL
+    return(las)
+  }, error = function(e) {
+    print(paste("Error in lasfilternoise:", e))
+    return(NULL)
+  })
 }
 
 normalize <- function(las_denoised, f){
-  # Normalize data 
-  las_dtm <- readLAS(f)
-  dtm <- rasterize_terrain(las_dtm, algorithm = knnidw(k = 8, p = 2))
-  las_normalized <- normalize_height(las_denoised, dtm)
-  return(las_normalized)
+  tryCatch({
+    las_dtm <- readLAS(f)
+    dtm <- rasterize_terrain(las_dtm, algorithm = knnidw(k = 8, p = 2))
+    las_normalized <- normalize_height(las_denoised, dtm)
+    return(las_normalized)
+  }, error = function(e) {
+    print(paste("Error in normalize:", e))
+    return(NULL)
+  })
 }
 
 chm <- function(las_normalized){
-  # Generate a normalized canopy height model ~198 seconds
-  # https://github.com/Jean-Romain/lidR/wiki/Segment-individual-trees-and-compute-metrics
-  algo <- pitfree(c(0,2,5,10,15), c(3,1.5), subcircle = 0.2)
-  chm  <- grid_canopy(las_normalized, 0.5, algo)
-  
-  # Smooth the CHM with double pass median filter
-  ker <- matrix(1,3,3)
-  chm_s <- focal(chm, w = ker, fun = median)
-  return(chm_s)
+  tryCatch({
+    algo <- pitfree(c(0,2,5,10,15), c(3,1.5), subcircle = 0.2)
+    chm  <- grid_canopy(las_normalized, 0.5, algo)
+    
+    # Smooth the CHM with double pass median filter
+    ker <- matrix(1,3,3)
+    chm_s <- focal(chm, w = ker, fun = median)
+    return(chm_s)
+  }, error = function(e) {
+    print(paste("Error in chm:", e))
+    return(NULL)
+  })
 }
 
 treeseg <- function(canopy_height_model, las_normalized){
-  # tree segmentation
-  algo <- watershed(canopy_height_model, th_tree = 4)
-  las_watershed  <- segment_trees(las_normalized, algo)
-  
-  # remove points that are not assigned to a tree
-  trees <- filter_poi(las_watershed, !is.na(treeID))
-  return(trees)
+  tryCatch({
+    algo <- watershed(canopy_height_model, th_tree = 4)
+    las_watershed  <- segment_trees(las_normalized, algo)
+    
+    # remove points that are not assigned to a tree
+    trees <- filter_poi(las_watershed, !is.na(treeID))
+    return(trees)
+  }, error = function(e) {
+    print(paste("Error in treeseg:", e))
+    return(NULL)
+  })
 }
 
 tree_hull_polys <- function(las_trees){
-  # Generate polygon tree canopies
-  hulls  <- delineate_crowns(las_trees, type = "concave", concavity = 2, func = .stdmetrics)
-  #hulls_sub <- subset(hulls, area <1200 & area > 3) # Not needed with new pitfree algorithm in CHM
-  return(hulls)
+  tryCatch({
+    hulls  <- delineate_crowns(las_trees, type = "concave", concavity = 2, func = .stdmetrics)
+    return(hulls)
+  }, error = function(e) {
+    print(paste("Error in tree_hull_polys:", e))
+    return(NULL)
+  })
 }
+
 process_las_files <- function(files, out_dir) {
   counter <- 1
   for (f in files) {
-  #   tic(paste(basename(f), "processed"))
-    # Read in las file and write index file
-    print(paste("Reading ", basename(f), " | ", counter, " of ", length(files)))
-    las <- readLAS(f, filter="-keep_class 0 2 6") # read las and keep class 2 (bare earth) and 5 (trees) classes
-    #las <- filter_poi(las, G < 35000)
-    writelax(f) # Create a spatial index file (.lax) to speed up processing
-    
-    print("Filtering noise...")
-    las_denoised <- lasfilternoise(las, sensitivity = 1.2)
-    print("Normalizing...")
-    las_normalized <- normalize(las_denoised, f)
-    print("Generating CHM...")
-    canopy_height_model <- chm(las_normalized)
-    print("Tree Segmentation...")
-    las_trees <- treeseg(canopy_height_model, las_normalized)
-    print("Generating Tree hulls...")
-    final_tree_hulls <- tree_hull_polys(las_trees)
+    tryCatch({
+      subdir_name <- tools::file_path_sans_ext(basename(f))
+      out_subdir <- file.path(out_dir, subdir_name, "r_results")
+      shp_name <- paste0(subdir_name, "_r_output.shp")
+      output_shp_path <- file.path(out_subdir, shp_name)
+      
+      if (file.exists(output_shp_path)) {
+        print(paste("Shapefile already exists, skipping:", output_shp_path))
+        next
+      }
+      
+      print(paste("Reading ", basename(f), " | ", counter, " of ", length(files)))
+      las <- readLAS(f, filter="-keep_class 0 2 6") # read las and keep class 2 (bare earth) and 5 (trees) classes
+      writelax(f) # Create a spatial index file (.lax) to speed up processing
+      
+      print("Filtering noise...")
+      las_denoised <- lasfilternoise(las, sensitivity = 1.2)
+      if (is.null(las_denoised)) next
 
-    subdir_name <- tools::file_path_sans_ext(basename(f))
-    out_subdir <- file.path(out_dir, subdir_name, "r_results")
-    if (!file.exists(out_subdir)) {
-      dir.create(out_subdir, recursive = TRUE)
-    }
-    
-    # Output shapefile name
-    shp_name <- paste0(subdir_name,"_r_output")
-    print("Writing to shp...")
-    # Write to shapefile  
-    writeOGR(obj = final_tree_hulls, dsn = out_subdir, layer = shp_name, driver = "ESRI Shapefile")
-    # toc()
-    counter <- counter + 1
-    rm(las, las_denoised, las_normalized, canopy_height_model, las_trees, final_tree_hulls) # Remove all of the stored objects prior to the next iteration (Comment out if you want to inspect the output)
-    print("On to the next las...")
+      print("Normalizing...")
+      las_normalized <- normalize(las_denoised, f)
+      if (is.null(las_normalized)) next
+
+      print("Generating CHM...")
+      canopy_height_model <- chm(las_normalized)
+      if (is.null(canopy_height_model)) next
+
+      print("Tree Segmentation...")
+      las_trees <- treeseg(canopy_height_model, las_normalized)
+      if (is.null(las_trees)) next
+
+      print("Generating Tree hulls...")
+      final_tree_hulls <- tree_hull_polys(las_trees)
+      if (is.null(final_tree_hulls)) next
+
+      if (!file.exists(out_subdir)) {
+        dir.create(out_subdir, recursive = TRUE)
+      }
+      
+      print("Writing to shp...")
+      writeOGR(obj = final_tree_hulls, dsn = out_subdir, layer = tools::file_path_sans_ext(shp_name), driver = "ESRI Shapefile")
+      counter <- counter + 1
+      rm(las, las_denoised, las_normalized, canopy_height_model, las_trees, final_tree_hulls) # Remove all of the stored objects prior to the next iteration
+      print("On to the next las...")
+    }, error = function(e) {
+      print(paste("Error processing file", f, ":", e))
+      next
+    })
   }
 }
 
 for (subdir in subdirs) {
-  # Create the corresponding output subdirectory
-  relative_subdir <- sub(paste0("^", base_dir, "/?"), "", subdir)
-  out_subdir <- file.path(out_base_dir, relative_subdir)
-  dir.create(out_subdir, recursive = TRUE, showWarnings = FALSE)
-  files <- list.files(path = subdir, pattern = "\\.las$", full.names = TRUE, recursive = FALSE)
-  if (length(files) > 0) {
-    print(paste("Processing files in directory:", subdir))
-    process_las_files(files, out_subdir)
-  }
+  tryCatch({
+    relative_subdir <- sub(paste0("^", base_dir, "/?"), "", subdir)
+    out_subdir <- file.path(out_base_dir, relative_subdir)
+    dir.create(out_subdir, recursive = TRUE, showWarnings = FALSE)
+    files <- list.files(path = subdir, pattern = "\\.las$", full.names = TRUE, recursive = FALSE)
+    if (length(files) > 0) {
+      print(paste("Processing files in directory:", subdir))
+      process_las_files(files, out_subdir)
+    }
+  }, error = function(e) {
+    print(paste("Error processing subdir", subdir, ":", e))
+    next
+  })
 }
 
 
