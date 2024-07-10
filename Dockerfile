@@ -26,8 +26,8 @@ RUN mkdir -p /myapp/test_results
 # Run the post-processing script
 CMD ["python3", "postprocess.py"]
 
-# docker build -t treedetection3d:2 .
-# docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:2 python3 preprocess.py
-# docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:2 python3 generate_tree.py
-# docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:2 Rscript watershed_tree.R
-# docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:2 python3 combine_results.py
+# docker build -t treedetection3d:1 .
+# docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:1 python3 preprocess.py
+# docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:1 python3 generate_tree.py
+# docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:1 Rscript watershed.R
+# docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:1 python3 combine_results.py
