@@ -78,9 +78,11 @@ docker run -it --rm -v "%cd%/:/myapp/" treedetection3d:1 python3 combine_results
 - Global Mapper Pro for manual classification of points.
 
 ### My system info:
+```
 Memory (RAM): Total RAM: 64 GB
 CPU (Processor): AMD Ryzen 5 5600G
 Cores and Threads: 6 cores, 12 threads
 GPU (Graphics Card): NVIDIA GeForce RTX 3060
 Dedicated GPU Memory: 12 GB
 OS: Windows 11 pro
+```
